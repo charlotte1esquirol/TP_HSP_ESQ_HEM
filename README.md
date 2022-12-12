@@ -12,3 +12,8 @@
 
  C'est cohérent avec le cours car nous savons que le GPU est beaucoup plus compétent sur des calculs complexes. Les temps d'éxécution sont réduits grâce au GPU. 
  
+  <details>
+ <summary>
+ Partie 2 -  Premières couches du réseau de neurone LeNet-5 : Convolution 2D et subsampling
+   </summary>
+ <summary>
