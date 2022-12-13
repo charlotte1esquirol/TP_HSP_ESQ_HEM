@@ -23,7 +23,7 @@ void MatrixInit(float *M, int n, int p, int m, int init){
 
     else {
         for (int i=0; i<n*p; i++){ //n*p la taille de la matrice, on parcourt toute la matrice
-            random_value = (float)rand() / (float)((RAND_MAX*1.0)-1);
+            random_value = ((float)rand() / (float)((RAND_MAX))*2-1);
             M[i] = random_value;
         }//printf("%f", random_value);
     }
@@ -100,87 +100,97 @@ __global__ void cudaSubsampling(float* M, float* Mout, int M_nb_raw, int M_nb_co
                 }
             }
 
-            if(i==0){
-                Mout[i*Mout_nb_column+(j/subsampling_size)+k*Mout_nb_column*Mout_nb_raw]=average;
-            }
-            else if(j==0){
-                Mout[(i/subsampling_size)*Mout_nb_column+(j)+k*Mout_nb_column*Mout_nb_raw]=average;
-            }
-            else{
-                Mout[(i/subsampling_size)*Mout_nb_column+(j/subsampling_size)+k*Mout_nb_column*Mout_nb_raw]=average;
-            }     
+        
+            Mout[(i/subsampling_size)*Mout_nb_column+(j/subsampling_size)+k*Mout_nb_column*Mout_nb_raw]=average;
+               
             
         }
     }
 }
 
+__device__ float* activation_tanh(float* M, int M_nb_raw, int M_nb_column, int M_nb_filtre){
 
+    int i = threadIdx.x;
+    int j = threadIdx.y;
+
+    if(i<M_nb_raw && j<M_nb_column){
+
+        for(int k=0;k<M_nb_filtre;k++){
+
+            M[i*M_nb_column+j+k*M_nb_raw*M_nb_column]=tanh(M[i*M_nb_column+j+k*M_nb_raw*M_nb_column]);
+
+        }
+    }
+
+    return M;
+
+}
+
+__global__ void cudaActivation_tanh(float* M,  int M_nb_raw, int M_nb_column, int M_nb_filtre){
+    activation_tanh(M, M_nb_raw, M_nb_column, M_nb_filtre);
+}
 
 
 
 int main(){
     
-    //int argc, char **argv[]
+//Initialisation des  matrices sur le CPU
+
+    // Initialisation de nos matrices réelles
+
+    //printf("Matrices initialisées : \n");
 
     float *raw_data;
     raw_data = (float*)malloc(32*32*1*sizeof(float));
     MatrixInit(raw_data,32,32,1,1);
-    MatrixPrint(raw_data,32,32);
+    //MatrixPrint(raw_data,32,32);
 
     float *C1_data;
     C1_data = (float*)malloc(28*28*6*sizeof(float));
     MatrixInit(C1_data,28,28,6,0);
-    MatrixPrint(C1_data,28,28);
+    //MatrixPrint(C1_data,28,28);
 
     float *S1_data;
     S1_data = (float*)malloc(14*14*6*sizeof(float));
     MatrixInit(S1_data,14,14,6,0);
-    MatrixPrint(S1_data,14,14);
+    //MatrixPrint(S1_data,14,14);
 
     float *C1_kernel;
     C1_kernel = (float*)malloc(5*5*6*sizeof(float));
     MatrixInit(C1_kernel,5,5,6,1);
-    MatrixPrint(C1_kernel,5,5);
+    //MatrixPrint(C1_kernel,5,5);
 
-    // Test sur matrices plus petites pour vérifier les valeurs :
+    // Initialisation de matrices de tailles réduites pour vérifier l'exactitude de nos résultats.
+
+    //printf("Matrices de test de tailles réduites initialisées : \n");
 
     float *raw_data2;
     raw_data2 = (float*)malloc(5*5*1*sizeof(float));
     MatrixInit(raw_data2,5,5,1,1);
-    printf("Matrice initiale:\n");
-    MatrixPrint(raw_data2,5,5);
+    //MatrixPrint(raw_data2,5,5);
 
     float *C1_data2;
-    C1_data2 = (float*)malloc(4*4*1*sizeof(float));
-    MatrixInit(C1_data2,4,4,1,0);
-    printf("Matrice après convolution 2D:\n");
-    MatrixPrint(C1_data2,4,4);
+    C1_data2 = (float*)malloc(4*4*2*sizeof(float));
+    MatrixInit(C1_data2,4,4,2,0);
+    //MatrixPrint(C1_data2,4,4);
 
     float *C1_kernel2;
-    C1_kernel2 = (float*)malloc(2*2*1*sizeof(float));
+    C1_kernel2 = (float*)malloc(2*2*2*sizeof(float));
     MatrixInit(C1_kernel2,2,2,1,1);
-    printf("Matrice kernel:\n");
-    MatrixPrint(C1_kernel2,2,2);
+    //MatrixPrint(C1_kernel2,2,2);
 
     float *S1_data2;
-    S1_data2 = (float*)malloc(2*2*1*sizeof(float));
+    S1_data2 = (float*)malloc(2*2*2*sizeof(float));
     MatrixInit(S1_data2,2,2,1,0);
-    printf("Matrice après sous-échantillonnage:\n");
-    MatrixPrint(S1_data2,2,2);
+    //MatrixPrint(S1_data2,2,2);
 
 
 
 
 
+// Tests de nos layers sur GPU
 
-
-
-
-
-
-
-
-    // Tests sur GPU
+    // Tests sur nos matrices réelles
 
      float *raw_data_g;
      float *C1_data_g;
@@ -202,8 +212,14 @@ int main(){
      dim3 gridDim2(1,1);
      dim3 blockDim2(32,32);
 
+
+     // Application de la convolution 2D
      cudaConv2D<<<gridDim2,blockDim2>>>(raw_data_g, C1_kernel_g, C1_data_g, 32, 32, 5, 6, 28, 28);
      cudaDeviceSynchronize();
+     // Application de la fonction d'activation Tanh
+     cudaActivation_tanh<<<gridDim2,blockDim2>>>(C1_data_g, 28, 28, 6);
+     cudaDeviceSynchronize();
+     // Application du sous-échantillonnage
      cudaSubsampling<<<gridDim2,blockDim2>>>(C1_data_g, S1_data_g, 28, 28, 6, 2, 14, 14);
      cudaDeviceSynchronize();
 
@@ -212,11 +228,17 @@ int main(){
      cudaDeviceSynchronize();
 
 
+     // Affichage des matrices après chaque layer 
+     printf("Matrice initiale:\n");
      MatrixPrint(raw_data,32,32);
+     printf("Matrice kernel:\n");
      MatrixPrint(C1_kernel,5,5);
+     printf("Matrice après convolution 2D et fonction d'activation :\n");
      MatrixPrint(C1_data,28,28);
+     printf("Matrice après sous-échantillonnage:\n");
      MatrixPrint(S1_data,14,14);
      
+
      cudaFree(raw_data_g);
      cudaFree(C1_kernel);
      cudaFree(C1_data);
@@ -228,7 +250,7 @@ int main(){
      free(S1_data);
 
 
-    // Test sur plus petite matrice pour vérifier les valeurs
+    // Test sur nos matrices de plus petites tailles pour vérifier l'exactitude de nos résultats
 
      float *raw_data2_g;
      float *C1_data2_g;
@@ -250,25 +272,33 @@ int main(){
      dim3 gridDim(1,1);
      dim3 blockDim(5,5);
 
+
+     // Application de la convolution 2D
      cudaConv2D<<<gridDim,blockDim>>>(raw_data2_g, C1_kernel2_g, C1_data2_g, 5, 5, 2, 1, 4, 4);
+     cudaDeviceSynchronize();
+     // Application de la fonction d'activation Tanh
+     cudaActivation_tanh<<<gridDim2,blockDim2>>>(C1_data2_g, 4, 4, 1);
+     cudaDeviceSynchronize();
+     // Application du sous-échantillonnage
      cudaSubsampling<<<gridDim,blockDim>>>(C1_data2_g, S1_data2_g, 4, 4, 1, 2, 2, 2);
      cudaDeviceSynchronize();
-
     
      cudaMemcpy(C1_data2, C1_data2_g, 4*4*1*sizeof(float), cudaMemcpyDeviceToHost);
      cudaMemcpy(S1_data2, S1_data2_g, 2*2*1*sizeof(float), cudaMemcpyDeviceToHost);
      cudaDeviceSynchronize();
 
 
+     // Affichage de nos matrices après chaque layer
      printf("Matrice initiale:\n");
      MatrixPrint(raw_data2,5,5);
      printf("Matrice kernel:\n");
      MatrixPrint(C1_kernel2,2,2);
-     printf("Matrice après convolution 2D:\n");
+     printf("Matrice après convolution 2D et fonction d'activation:\n");
      MatrixPrint(C1_data2,4,4);
      printf("Matrice après sous-échantillonnage:\n");
      MatrixPrint(S1_data2,2,2);
      
+
      cudaFree(raw_data2_g);
      cudaFree(C1_kernel2);
      cudaFree(C1_data2);
@@ -282,6 +312,7 @@ int main(){
 
     return 0;
     }
+
 
 
 
