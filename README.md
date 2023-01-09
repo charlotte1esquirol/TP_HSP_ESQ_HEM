@@ -143,6 +143,8 @@ On vient ensuite tester notre fonction d’activation sur une matrice de petite 
 
  ## Partie 3 - Un peu de Python
  
- Fonctions manquantes : 
+ Fonctions manquantes : Il nous manque actuellement une deuxième convolution et sa fonction d'activation suivie d'un sous-échantillonage. Ensuite, il nous manque une couche Flatten et 3 couches Dense dont une suivie d'une fonction d'activation de type softmax. Pour la couche Flatten, ici dans notre cas nous n'avons pas besoin de modifier la sortie de notre deuxième échantillonage car celle ci est un tableau de valeurs (1x400)=(1x(5x5x16)). De ce fait, nous n'avons pas besoin de modifier. Puis, pour la couche Dense, nous savons que cela consiste en la multiplication d'une matrice d'entrée X avec les poids W correspondants puis à l'addition de ce produit avec une matrice B représentant les biais. On a donc SortieDeCoucheDense=W*X+B.
+ 
+ Cependant, nous avons rencontré beaucoup de problèmes avec la couche Dense ce qui nous a empeché de continuer le reste du TP. Actuellement, nos deux premières couches Dense ne posent plus de problème et ne provoquent pas la mise à 0 de nos matrices précédentes mais la troisième si. Nous n'avons pas réussi à régler le soucis. 
  
  
