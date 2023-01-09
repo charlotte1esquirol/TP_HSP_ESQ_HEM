@@ -154,25 +154,24 @@ __device__ float* activation_tanh(float* M, int M_nb_raw, int M_nb_column, int M
 
 }
 
-__device__ int activation_softmax(float* M, int M_nb_column){
-
-
-    float max;
-    int a;
-
-    max=0.0;
-    a=0;
-
-        for(int k=0;k<M_nb_column;k++){
-
-            if(M[k]>max){
-                a=k;
-            }
-
-        }
-
-    return a;
-
+__device__ float* activation_softmax(float* M, int M_nb_raw, int M_nb_column, int M_nb_filtre) {
+  int i = threadIdx.x;
+  int j = threadIdx.y;
+  if (i < M_nb_raw && j < M_nb_column) {
+    float max_value = -FLT_MAX;
+    for (int k = 0; k < M_nb_filtre; k++) {
+      max_value = fmax(max_value, M[i * M_nb_column + j + k * M_nb_raw * M_nb_column]);
+    }
+    float sum = 0;
+    for (int k = 0; k < M_nb_filtre; k++) {
+      M[i * M_nb_column + j + k * M_nb_raw * M_nb_column] = exp(M[i * M_nb_column + j + k * M_nb_raw * M_nb_column] - max_value);
+      sum += M[i * M_nb_column + j + k * M_nb_raw * M_nb_column];
+    }
+    for (int k = 0; k < M_nb_filtre; k++) {
+      M[i * M_nb_column + j + k * M_nb_raw * M_nb_column] /= sum;
+    }
+  }
+  return M;
 }
 
 __global__ void cudaActivation_tanh(float* M,  int M_nb_raw, int M_nb_column, int M_nb_filtre){
